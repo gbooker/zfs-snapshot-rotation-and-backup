@@ -280,7 +280,6 @@ class ZFS_fs:
 			if self.verbose:
 				print("Sync mark created: "+self.pool.remote_cmd+" "+sync_mark_snapshot)
 
-			dst_fs.rollback(last_common_snapshot.split("@")[1])
 			return self.run_sync(dst_fs=dst_fs,start_snap=last_common_snapshot,
 				stop_snap=sync_mark_snapshot,print_output=print_output)
 
@@ -291,7 +290,7 @@ class ZFS_fs:
 	def run_sync(self,dst_fs=None, start_snap=None, stop_snap=None,print_output=False):
 		size=self.estimate_snapshot_size(stop_snap,start_snapshot=start_snap)
 		sync_command=self.pool.remote_cmd+" zfs send -p -I "+start_snap+" "+stop_snap+ "|pv -pterbs "+size+"|"+\
-			dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs
+			dst_fs.pool.remote_cmd+" zfs receive -Fv "+dst_fs.fs
 		if self.verbose or self.dry_run:
 			print("Running sync: "+sync_command)
 		if not self.dry_run:
