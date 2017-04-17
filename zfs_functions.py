@@ -215,6 +215,18 @@ class ZFS_fs:
 		if not self.dry_run:
 			subprocess.check_call(snapshot_command, shell=True)
 
+	def estimate_snapshot_size(self,end_snapshot,start_snapshot=None):
+		if start_snapshot==None:
+			estimate=subprocess.check_output(self.pool.remote_cmd+" zfs send -nvp "+end_snapshot,shell=True,universal_newlines=True).split("\n")[-2]
+		else:
+			estimate=subprocess.check_output(self.pool.remote_cmd+" zfs send -nvp -I "+start_snapshot+" "+end_snapshot,shell=True,universal_newlines=True).split("\n")[-2]
+		size=estimate.split("size is ")[1]
+		if size.find(".")==-1:
+			return size
+		integer_size=size.split(".")[0]
+		unit=size[-1]
+		return integer_size+unit
+
 	def transfer_to(self,dst_fs=None):
 		if self.verbose:
 			print("trying to transfer: "+self.pool.remote_cmd+" "+self.fs+" to "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+".")
@@ -226,11 +238,13 @@ class ZFS_fs:
 			first_src_snapshot=self.get_first_snapshot()
 			for snapshot in dst_fs.get_snapshots_reversed():
 				dst_fs.destroy_zfs_snapshot(snapshot)
+			first_size=self.estimate_snapshot_size(first_src_snapshot)
+			last_size=self.estimate_snapshot_size(last_src_snapshot,start_snapshot=first_src_snapshot)
 			commands=[\
-				self.pool.remote_cmd+" zfs send -p  "+first_src_snapshot+" | "+\
-					dst_fs.pool.remote_cmd+" zfs receive -F "+dst_fs.fs,\
-				self.pool.remote_cmd+" zfs send -p -I "+first_src_snapshot+" "+last_src_snapshot+" | "+\
-					dst_fs.pool.remote_cmd+" zfs receive "+dst_fs.fs 
+				self.pool.remote_cmd+" zfs send -p  "+first_src_snapshot+"|pv -pterbs "+first_size+"|"+\
+					dst_fs.pool.remote_cmd+" zfs receive -vF "+dst_fs.fs,\
+				self.pool.remote_cmd+" zfs send -p -I "+first_src_snapshot+" "+last_src_snapshot+"|pv -pterbs "+last_size+"|"+\
+					dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs 
 			]
 
 			for command in commands:
@@ -273,8 +287,9 @@ class ZFS_fs:
 			return self.transfer_to(dst_fs=dst_fs)
 
 	def run_sync(self,dst_fs=None, start_snap=None, stop_snap=None):
-		sync_command=self.pool.remote_cmd+" zfs send -p -I "+start_snap+" "+stop_snap+ "|"+\
-			dst_fs.pool.remote_cmd+" zfs receive "+dst_fs.fs
+		size=self.estimate_snapshot_size(stop_snap,start_snapshot=start_snap)
+		sync_command=self.pool.remote_cmd+" zfs send -p -I "+start_snap+" "+stop_snap+ "|pv -pterbs "+size+"|"+\
+			dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs
 		if self.verbose or self.dry_run:
 			print("Running sync: "+sync_command)
 		if not self.dry_run:
