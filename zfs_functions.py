@@ -265,10 +265,7 @@ class ZFS_fs:
 			raise Exception ( "sync : "+str(commands)+" failed")
 
 
-	def sync_with(self,dst_fs=None,target_name="",print_output=False):
-		if self.verbose:
-			print("Syncing "+self.pool.remote_cmd+" "+self.fs+" to "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+" with target name "+target_name+".")
-
+	def sync_without_snap(self,dst_fs=None,print_output=False):
 		if dst_fs.fs in dst_fs.pool.zfs_filesystems:
 			last_common_snapshot=self.get_last_common_snapshot(dst_fs=dst_fs)
 		else:
@@ -277,16 +274,26 @@ class ZFS_fs:
 			last_common_snapshot=None
 
 		if last_common_snapshot != None:
-			sync_mark_snapshot=self.create_zfs_snapshot(prefix=target_name)
 			if self.verbose:
 				print("Sync mark created: "+self.pool.remote_cmd+" "+sync_mark_snapshot)
+
+			sync_mark_snapshot=self.get_last_snapshot();
+			if last_common_snapshot==sync_mark_snapshot:
+				print("Snapshots are already synced")
+				return True
 
 			return self.run_sync(dst_fs=dst_fs,start_snap=last_common_snapshot,
 				stop_snap=sync_mark_snapshot,print_output=print_output)
 
 		else:
-			self.create_zfs_snapshot(prefix=target_name)
 			return self.transfer_to(dst_fs=dst_fs,print_output=print_output)
+
+	def sync_with(self,dst_fs=None,target_name="",print_output=False):
+		if self.verbose:
+			print("Syncing "+self.pool.remote_cmd+" "+self.fs+" to "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+" with target name "+target_name+".")
+
+		self.create_zfs_snapshot(prefix=target_name)
+		self.sync_without_snap(dst_fs=dest_fs,print_output=print_output)
 
 	def run_sync(self,dst_fs=None, start_snap=None, stop_snap=None,print_output=False):
 		size=self.estimate_snapshot_size(stop_snap,start_snapshot=start_snap)
