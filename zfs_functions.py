@@ -238,9 +238,10 @@ class ZFS_fs:
 					print("running "+command)
 				if not self.dry_run:
 					subprocess.call(command,shell=True)
+			last_src_snapshot_name = last_src_snapshot.split("@")[1]
 			dst_fs.pool.update_zfs_snapshots()
 			for snap in dst_fs.get_snapshots():
-				if last_src_snapshot in snap:
+				if last_src_snapshot_name in snap.split("@")[1]:
 					if self.verbose:
 						print("Sucessfully transferred "+last_src_snapshot)
 					return True
