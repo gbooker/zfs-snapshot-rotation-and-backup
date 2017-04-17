@@ -243,6 +243,7 @@ class ZFS_fs:
 			commands=[\
 				self.pool.remote_cmd+" zfs send -p  "+first_src_snapshot+"|pv -pterbs "+first_size+"|"+\
 					dst_fs.pool.remote_cmd+" zfs receive -vF "+dst_fs.fs,\
+					self.pool.remote_cmd+" zfs set readonly=on "+dst_fs.fs,\
 				self.pool.remote_cmd+" zfs send -p -I "+first_src_snapshot+" "+last_src_snapshot+"|pv -pterbs "+last_size+"|"+\
 					dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs 
 			]
