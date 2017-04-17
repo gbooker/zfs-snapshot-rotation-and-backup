@@ -227,7 +227,7 @@ class ZFS_fs:
 		unit=size[-1]
 		return integer_size+unit
 
-	def transfer_to(self,dst_fs=None):
+	def transfer_to(self,dst_fs=None,print_output=False):
 		if self.verbose:
 			print("trying to transfer: "+self.pool.remote_cmd+" "+self.fs+" to "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+".")
 		if dst_fs.fs in dst_fs.pool.zfs_filesystems:
@@ -251,7 +251,9 @@ class ZFS_fs:
 				if self.verbose or self.dry_run:
 					print("running "+command)
 				if not self.dry_run:
-					subprocess.call(command,shell=True)
+					output=subprocess.check_output(command,shell=True,universal_newlines=True)
+					if print_output:
+						print(output)
 			last_src_snapshot_name = last_src_snapshot.split("@")[1]
 			dst_fs.pool.update_zfs_snapshots()
 			for snap in dst_fs.get_snapshots():
@@ -262,7 +264,7 @@ class ZFS_fs:
 			raise Exception ( "sync : "+str(commands)+" failed")
 
 
-	def sync_with(self,dst_fs=None,target_name=""):
+	def sync_with(self,dst_fs=None,target_name="",print_output=False):
 		if self.verbose:
 			print("Syncing "+self.pool.remote_cmd+" "+self.fs+" to "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+" with target name "+target_name+".")
 
@@ -280,20 +282,22 @@ class ZFS_fs:
 
 			dst_fs.rollback(last_common_snapshot.split("@")[1])
 			return self.run_sync(dst_fs=dst_fs,start_snap=last_common_snapshot,
-				stop_snap=sync_mark_snapshot)
+				stop_snap=sync_mark_snapshot,print_output=print_output)
 
 		else:
 			self.create_zfs_snapshot(prefix=target_name)
-			return self.transfer_to(dst_fs=dst_fs)
+			return self.transfer_to(dst_fs=dst_fs,print_output=print_output)
 
-	def run_sync(self,dst_fs=None, start_snap=None, stop_snap=None):
+	def run_sync(self,dst_fs=None, start_snap=None, stop_snap=None,print_output=False):
 		size=self.estimate_snapshot_size(stop_snap,start_snapshot=start_snap)
 		sync_command=self.pool.remote_cmd+" zfs send -p -I "+start_snap+" "+stop_snap+ "|pv -pterbs "+size+"|"+\
 			dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs
 		if self.verbose or self.dry_run:
 			print("Running sync: "+sync_command)
 		if not self.dry_run:
-			subprocess.call(sync_command,shell=True)
+			output=subprocess.check_output(sync_command,shell=True,universal_newlines=True)
+			if print_output:
+				print(output)
 
 			dst_fs.pool.update_zfs_snapshots()
 			sync_mark=stop_snap.split("@")[1]
