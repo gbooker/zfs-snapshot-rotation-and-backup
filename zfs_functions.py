@@ -238,14 +238,19 @@ class ZFS_fs:
 			first_src_snapshot=self.get_first_snapshot()
 			for snapshot in dst_fs.get_snapshots_reversed():
 				dst_fs.destroy_zfs_snapshot(snapshot)
-			first_size=self.estimate_snapshot_size(first_src_snapshot)
-			last_size=self.estimate_snapshot_size(last_src_snapshot,start_snapshot=first_src_snapshot)
+			firstCmd=self.pool.remote_cmd+" zfs send -p  "+first_src_snapshot
+			secondCmd=self.pool.remote_cmd+" zfs send -p -I "+first_src_snapshot+" "+last_src_snapshot
+			if print_output:
+				size=self.estimate_snapshot_size(first_src_snapshot)
+				firstCmd+="|pv -pterbs "+size
+				size=self.estimate_snapshot_size(last_src_snapshot,start_snapshot=first_src_snapshot)
+				secondCmd+="|pv -pterbs "+size
+			firstCmd+="|"+dst_fs.pool.remote_cmd+" zfs receive -vF "+dst_fs.fs
+			secondCmd+="|"+dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs 
 			commands=[\
-				self.pool.remote_cmd+" zfs send -p  "+first_src_snapshot+"|pv -pterbs "+first_size+"|"+\
-					dst_fs.pool.remote_cmd+" zfs receive -vF "+dst_fs.fs,\
-					self.pool.remote_cmd+" zfs set readonly=on "+dst_fs.fs,\
-				self.pool.remote_cmd+" zfs send -p -I "+first_src_snapshot+" "+last_src_snapshot+"|pv -pterbs "+last_size+"|"+\
-					dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs 
+				firstCmd,\
+				self.pool.remote_cmd+" zfs set readonly=on "+dst_fs.fs,\
+				secondCmd
 			]
 
 			for command in commands:
@@ -297,8 +302,10 @@ class ZFS_fs:
 
 	def run_sync(self,dst_fs=None, start_snap=None, stop_snap=None,print_output=False):
 		size=self.estimate_snapshot_size(stop_snap,start_snapshot=start_snap)
-		sync_command=self.pool.remote_cmd+" zfs send -p -I "+start_snap+" "+stop_snap+ "|pv -pterbs "+size+"|"+\
-			dst_fs.pool.remote_cmd+" zfs receive -Fv "+dst_fs.fs
+		sync_command=self.pool.remote_cmd+" zfs send -p -I "+start_snap+" "+stop_snap
+		if print_output:
+			sync_command+="|pv -pterbs "+size
+		sync_command+="|"+dst_fs.pool.remote_cmd+" zfs receive -Fv "+dst_fs.fs
 		if self.verbose or self.dry_run:
 			print("Running sync: "+sync_command)
 		if not self.dry_run:
