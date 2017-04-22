@@ -196,10 +196,13 @@ class ZFS_fs:
 					return src_snapshot
 		return None
 
-	def create_zfs_snapshot(self,prefix=""):
-		if len(prefix)==0:
+	def create_zfs_snapshot(self,prefix="",name=""):
+		if len(prefix)==0 and len(name)==0:
 			raise ValueError("prefix for snapshot must be defined")
-		snapshot=self.fs+"@"+prefix+"-"+self.timestamp_string()
+		if len(name)==0:
+			snapshot=self.fs+"@"+prefix+"-"+self.timestamp_string()
+		else:
+			snapshot=self.fs+"@"+name
 		snapshot_command=self.pool.remote_cmd+" zfs snapshot "+snapshot
 		if self.verbose or self.dry_run:
 			print("Running: "+snapshot_command)
@@ -385,6 +388,54 @@ class ZFS_fs:
 		else:
 			return ""
 
+class TimeSnapshots:
+
+	def __init__(self, fs=None):
+		if fs==None:
+			raise ValueError("No ZFS filesystem specified")
+		else:
+			self.fs=fs
+
+	def takeSnapshot(self,duration=1,unit="h"):
+		if not unit in ["h", "d", "w", "m", "y"]:
+			raise ValueError("Only units of 'h', 'd', 'w', 'm', and 'y' are allowed")
+		if duration < 1:
+			raise ValueError("Duration must be strictly positive")
+		timestamp=datetime.datetime.today().strftime("%Y%m%d.%H%M")
+		name="auto-"+timestamp+"-"+str(duration)+unit
+		self.fs.create_zfs_snapshot(name=name)
+
+	def getExpiredSnapshots(self):
+		snapshot_list=[]
+		for snapshot in self.fs.get_snapshots():
+			skip=False
+			snapshot_name=snapshot.split("@")[1]
+			if snapshot_name.startswith("auto-"):
+				components=snapshot_name.split("-")
+				try:
+					timestamp=datetime.datetime.strptime(components[1], "%Y%m%d.%H%M")
+					durationStr=components[2]
+					duration=int(durationStr[:1])
+					unit=durationStr[len(durationStr)-1]
+					if unit in ["h", "d", "w", "m", "y"]:
+						delta={
+							'h': lambda x: datetime.timedelta(hours=x),
+							'd': lambda x: datetime.timedelta(days=x),
+							'w': lambda x: datetime.timedelta(weeks=x),
+							'm': lambda x: datetime.timedelta(months=x),
+							'y': lambda x: datetime.timedelta(years=x),
+						}[unit](duration)
+						expiretimestamp=timestamp+delta
+						if datetime.datetime.today() > expiretimestamp:
+							snapshot_list.append(snapshot)
+				except ValueError:
+					pass
+		return snapshot_list
+
+	def expireSnapshots(self):
+		snapshot_list=self.getExpiredSnapshots()
+		for snap_to_remove in snapshot_list:
+			self.fs.destroy_snapshot(snap_to_remove=snap_to_remove)
 
 
 
