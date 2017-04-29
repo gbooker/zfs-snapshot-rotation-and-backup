@@ -254,14 +254,19 @@ class ZFS_fs:
 			for snapshot in dst_fs.get_snapshots_reversed():
 				dst_fs.destroy_zfs_snapshot(snapshot)
 			firstCmd=self.pool.remote_cmd+" zfs send -p  "+first_src_snapshot
-			secondCmd=self.pool.remote_cmd+" zfs send -p -I "+first_src_snapshot+" "+last_src_snapshot
+			if first_src_snapshot != last_src_snapshot:
+				secondCmd=self.pool.remote_cmd+" zfs send -p -I "+first_src_snapshot+" "+last_src_snapshot
+			else:
+				secondCmd=None
 			if print_output:
 				size=self.estimate_snapshot_size(first_src_snapshot)
 				firstCmd+="|pv -pterbs "+size
-				size=self.estimate_snapshot_size(last_src_snapshot,start_snapshot=first_src_snapshot)
-				secondCmd+="|pv -pterbs "+size
+				if first_src_snapshot != last_src_snapshot:
+					size=self.estimate_snapshot_size(last_src_snapshot,start_snapshot=first_src_snapshot)
+					secondCmd+="|pv -pterbs "+size
 			firstCmd+="|"+dst_fs.pool.remote_cmd+" zfs receive -vF "+dst_fs.fs
-			secondCmd+="|"+dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs 
+			if first_src_snapshot != last_src_snapshot:
+				secondCmd+="|"+dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs 
 			commands=[\
 				firstCmd,\
 				self.pool.remote_cmd+" zfs set readonly=on "+dst_fs.fs,\
@@ -269,6 +274,8 @@ class ZFS_fs:
 			]
 
 			for command in commands:
+				if command == None:
+					continue
 				if self.verbose or self.dry_run:
 					print("running "+command)
 				if not self.dry_run:
@@ -295,11 +302,12 @@ class ZFS_fs:
 
 		if last_common_snapshot != None:
 			if self.verbose:
-				print("Sync mark created: "+self.pool.remote_cmd+" "+sync_mark_snapshot)
+				print("Sync mark found: "+self.pool.remote_cmd+" "+last_common_snapshot)
 
 			sync_mark_snapshot=self.get_last_snapshot();
 			if last_common_snapshot==sync_mark_snapshot:
-				print("Snapshots are already synced")
+				if self.verbose:
+					print("Snapshots are already synced")
 				return True
 
 			return self.run_sync(dst_fs=dst_fs,start_snap=last_common_snapshot,
@@ -336,6 +344,8 @@ class ZFS_fs:
 						print("Sucessfully transferred "+stop_snap)
 					return True
 			raise Exception ( "sync : "+sync_command+" failed")
+
+		return True
 
 	def rollback(self,snapshot):
 		rollback=self.pool.remote_cmd+" zfs rollback -r "+self.fs+"@"+snapshot
