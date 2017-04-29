@@ -205,7 +205,7 @@ class ZFS_fs:
 			snapshots.add(snapshot.split('@')[1])
 		
 		for snapshot in self.get_snapshots():
-			snapshots.remove(snapshot.split('@')[1])
+			snapshots.discard(snapshot.split('@')[1])
 		return snapshots
 
 	def create_zfs_snapshot(self,prefix="",name=""):
