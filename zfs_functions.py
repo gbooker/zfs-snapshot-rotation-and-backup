@@ -244,11 +244,16 @@ class ZFS_fs:
 		if self.verbose:
 			print("trying to transfer: "+self.pool.remote_cmd+" "+self.fs+" to "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+".")
 		if dst_fs.fs in dst_fs.pool.zfs_filesystems:
-			print(dst_fs.fs+" already exists.")
+			if self.verbose:
+				print(dst_fs.fs+" already exists.")
 		if dst_fs.destructive or (dst_fs.fs not in dst_fs.pool.zfs_filesystems):
-			print ("resetting "+dst_fs.fs)
+			if self.verbose:
+				print ("resetting "+dst_fs.fs)
 			last_src_snapshot=self.get_last_snapshot()
 			first_src_snapshot=self.get_first_snapshot()
+			if first_src_snapshot == None:
+				print ("No snapshots to transfer")
+				return False
 			for snapshot in dst_fs.get_snapshots_reversed():
 				dst_fs.destroy_zfs_snapshot(snapshot)
 			firstCmd=self.pool.remote_cmd+" zfs send -p  "+first_src_snapshot
