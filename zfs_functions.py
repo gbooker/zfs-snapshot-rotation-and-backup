@@ -347,6 +347,22 @@ class ZFS_fs:
 
 		return True
 
+	def remove_deleted_snapshots(self,dst_fs=None):
+		if self.verbose:
+			print("Removing snapshots previously removed from "+self.pool.remote_cmd+" "+self.fs+" from "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+".")
+
+		snapshot_names=self.get_missing_snapshot_names(dst_fs=dst_fs)
+		if len(snapshot_names) == 0:
+			if self.verbose:
+				print("No snapshots to remove")
+			return True
+
+		for snapshot_name in snapshot_names:
+			if not dst_fs.destroy_snapshot(snap_to_remove=dst_fs.fs+"@"+snapshot_name):
+				return False
+
+		return True
+
 	def rollback(self,snapshot):
 		rollback=self.pool.remote_cmd+" zfs rollback -r "+self.fs+"@"+snapshot
 		if self.dry_run==True:
@@ -398,8 +414,10 @@ class ZFS_fs:
 			try:
 				subprocess.check_call(command, shell=True)
 				self.pool.zfs_snapshots.remove(snap_to_remove)
+				return True
 			except subprocess.CalledProcessError as e:
 				print(e)
+				return False
 
 	def timestamp_string(self):
 		return datetime.datetime.today().strftime("%F--%H-%M-%S")
@@ -457,7 +475,10 @@ class TimeSnapshots:
 	def expireSnapshots(self):
 		snapshot_list=self.getExpiredSnapshots()
 		for snap_to_remove in snapshot_list:
-			self.fs.destroy_snapshot(snap_to_remove=snap_to_remove)
+			if not self.fs.destroy_snapshot(snap_to_remove=snap_to_remove):
+				return False
+
+		return True
 
 
 
