@@ -190,11 +190,23 @@ class ZFS_fs:
 		return ss
 
 	def get_last_common_snapshot(self,dst_fs=None):
-		for dst_snapshot in dst_fs.get_snapshots_reversed():
-			for src_snapshot in self.get_snapshots_reversed():
-				if dst_snapshot.split('@')[1] == src_snapshot.split('@')[1]:
-					return src_snapshot
+		snapshots = set()
+		for snapshot in dst_fs.get_snapshots():
+			snapshots.add(snapshot.split('@')[1])
+		
+		for snapshot in self.get_snapshots_reversed():
+			if snapshot.split('@')[1] in snapshots:
+				return snapshot
 		return None
+
+	def get_missing_snapshot_names(self,dst_fs=None):
+		snapshots = set()
+		for snapshot in dst_fs.get_snapshots():
+			snapshots.add(snapshot.split('@')[1])
+		
+		for snapshot in self.get_snapshots():
+			snapshots.remove(snapshot.split('@')[1])
+		return snapshots
 
 	def create_zfs_snapshot(self,prefix="",name=""):
 		if len(prefix)==0 and len(name)==0:
