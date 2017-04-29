@@ -178,16 +178,18 @@ class ZFS_fs:
 		return self.pool.get_zfs_snapshots_reversed(fs=self.fs, recursive=False)
 
 	def get_last_snapshot(self):
-		ss=subprocess.check_output(
-			self.pool.remote_cmd+" zfs list -o name -t snapshot -H -r "+self.fs+" |grep ^"+\
-				self.fs+"@",shell=True,universal_newlines=True).split("\n")[-2]
-		return ss
+		list=subprocess.check_output(
+			self.pool.remote_cmd+" zfs list -o name -t snapshot -H -r -d 1 "+self.fs,shell=True,universal_newlines=True).split("\n")
+		if len(list) < 2:
+			return None
+		return list[-2]
 
 	def get_first_snapshot(self):
-		ss=subprocess.check_output(
-			self.pool.remote_cmd+" zfs list -o name -t snapshot -H -r "+self.fs+" |grep ^"+\
-				self.fs+"@",shell=True,universal_newlines=True).split("\n")[0]
-		return ss
+		list=subprocess.check_output(
+			self.pool.remote_cmd+" zfs list -o name -t snapshot -H -r -d 1 "+self.fs,shell=True,universal_newlines=True).split("\n")
+		if len(list) < 2:
+			return None
+		return list[0]
 
 	def get_last_common_snapshot(self,dst_fs=None):
 		snapshots = set()
