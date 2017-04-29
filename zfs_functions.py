@@ -436,16 +436,16 @@ class TimeSnapshots:
 		else:
 			self.fs=fs
 
-	def takeSnapshot(self,duration=1,unit="h"):
+	def take_snapshot(self,duration=1,unit="h"):
 		if not unit in ["h", "d", "w", "m", "y"]:
 			raise ValueError("Only units of 'h', 'd', 'w', 'm', and 'y' are allowed")
 		if duration < 1:
 			raise ValueError("Duration must be strictly positive")
 		timestamp=datetime.datetime.today().strftime("%Y%m%d.%H%M")
 		name="auto-"+timestamp+"-"+str(duration)+unit
-		self.fs.create_zfs_snapshot(name=name)
+		return self.fs.create_zfs_snapshot(name=name)
 
-	def getExpiredSnapshots(self):
+	def get_expired_snapshots(self):
 		snapshot_list=[]
 		for snapshot in self.fs.get_snapshots():
 			skip=False
@@ -454,9 +454,9 @@ class TimeSnapshots:
 				components=snapshot_name.split("-")
 				try:
 					timestamp=datetime.datetime.strptime(components[1], "%Y%m%d.%H%M")
-					durationStr=components[2]
-					duration=int(durationStr[:1])
-					unit=durationStr[len(durationStr)-1]
+					duration_str=components[2]
+					duration=int(duration_str[:1])
+					unit=duration_str[len(duration_str)-1]
 					if unit in ["h", "d", "w", "m", "y"]:
 						delta={
 							'h': lambda x: datetime.timedelta(hours=x),
@@ -465,15 +465,15 @@ class TimeSnapshots:
 							'm': lambda x: datetime.timedelta(months=x),
 							'y': lambda x: datetime.timedelta(years=x),
 						}[unit](duration)
-						expiretimestamp=timestamp+delta
-						if datetime.datetime.today() > expiretimestamp:
+						expire_timestamp=timestamp+delta
+						if datetime.datetime.today() > expire_timestamp:
 							snapshot_list.append(snapshot)
 				except ValueError:
 					pass
 		return snapshot_list
 
-	def expireSnapshots(self):
-		snapshot_list=self.getExpiredSnapshots()
+	def expire_snapshots(self):
+		snapshot_list=self.get_expired_snapshots()
 		for snap_to_remove in snapshot_list:
 			if not self.fs.destroy_snapshot(snap_to_remove=snap_to_remove):
 				return False
