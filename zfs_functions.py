@@ -232,15 +232,11 @@ class ZFS_fs:
 
 	def estimate_snapshot_size(self,end_snapshot,start_snapshot=None):
 		if start_snapshot==None:
-			estimate=subprocess.check_output(self.pool.remote_cmd+" zfs send -nvp "+end_snapshot,shell=True,universal_newlines=True).split("\n")[-2]
+			estimate=subprocess.check_output(self.pool.remote_cmd+" zfs send -nvP "+end_snapshot,shell=True,universal_newlines=True).split("\n")[-2]
 		else:
-			estimate=subprocess.check_output(self.pool.remote_cmd+" zfs send -nvp -I "+start_snapshot+" "+end_snapshot,shell=True,universal_newlines=True).split("\n")[-2]
-		size=estimate.split("size is ")[1]
-		if size.find(".")==-1:
-			return size
-		integer_size=size.split(".")[0]
-		unit=size[-1]
-		return integer_size+unit
+			estimate=subprocess.check_output(self.pool.remote_cmd+" zfs send -nvP -I "+start_snapshot+" "+end_snapshot,shell=True,universal_newlines=True).split("\n")[-2]
+		size=estimate.split("size	")[1]
+		return size
 
 	def transfer_to(self,dst_fs=None,print_output=False):
 		if self.verbose:
