@@ -439,40 +439,69 @@ class TimeSnapshots:
 		else:
 			self.fs=fs
 
-	def take_snapshot(self,duration=1,unit="h"):
-		if not unit in ["h", "d", "w", "m", "y"]:
-			raise ValueError("Only units of 'h', 'd', 'w', 'm', and 'y' are allowed")
+	def take_snapshot(self,duration=1,unit="h",durationStr=None):
+		if durationStr == None:
+			if not unit in ["h", "d", "w", "y"]:
+				raise ValueError("Only units of 'h', 'd', 'w', and 'y' are allowed")
+			if duration < 1:
+				raise ValueError("Duration must be strictly positive")
+			durationStr = str(duration)+unit
+		timestamp=datetime.datetime.today().strftime("%Y%m%d.%H%M")
+		name="auto-"+timestamp+"-"+durationStr
+		return self.fs.create_zfs_snapshot(name=name)
+
+	@staticmethod
+	def Get_snapshot_time(snapshot_name):
+		if snapshot_name.startswith("auto-"):
+			components=snapshot_name.split("-")
+			return datetime.datetime.strptime(components[1], "%Y%m%d.%H%M")
+
+		return None
+
+	@staticmethod
+	def Get_time_delta(deltaStr):
+		if len(deltaStr) < 2:
+			raise ValueError("Invalid duration")
+
+		duration=int(deltaStr[:1])
 		if duration < 1:
 			raise ValueError("Duration must be strictly positive")
-		timestamp=datetime.datetime.today().strftime("%Y%m%d.%H%M")
-		name="auto-"+timestamp+"-"+str(duration)+unit
-		return self.fs.create_zfs_snapshot(name=name)
+
+		unit=deltaStr[len(deltaStr)-1]
+		if not unit in ["h", "d", "w", "y"]:
+			raise ValueError("Invalid duration")
+
+		delta={
+			'h': lambda x: datetime.timedelta(hours=x),
+			'd': lambda x: datetime.timedelta(days=x),
+			'w': lambda x: datetime.timedelta(weeks=x),
+			'y': lambda x: datetime.timedelta(years=x),
+		}[unit](duration)
+		return delta
+
+	@staticmethod
+	def Get_snapshot_expiration(snapshot_name):
+		if snapshot_name.startswith("auto-"):
+			components=snapshot_name.split("-")
+			timestamp=datetime.datetime.strptime(components[1], "%Y%m%d.%H%M")
+			delta = TimeSnapshots.Get_time_delta(components[2])
+			if delta != None:
+				return timestamp+delta
+
+		return None
 
 	def get_expired_snapshots(self):
 		snapshot_list=[]
 		for snapshot in self.fs.get_snapshots():
 			skip=False
 			snapshot_name=snapshot.split("@")[1]
-			if snapshot_name.startswith("auto-"):
-				components=snapshot_name.split("-")
-				try:
-					timestamp=datetime.datetime.strptime(components[1], "%Y%m%d.%H%M")
-					duration_str=components[2]
-					duration=int(duration_str[:1])
-					unit=duration_str[len(duration_str)-1]
-					if unit in ["h", "d", "w", "m", "y"]:
-						delta={
-							'h': lambda x: datetime.timedelta(hours=x),
-							'd': lambda x: datetime.timedelta(days=x),
-							'w': lambda x: datetime.timedelta(weeks=x),
-							'm': lambda x: datetime.timedelta(months=x),
-							'y': lambda x: datetime.timedelta(years=x),
-						}[unit](duration)
-						expire_timestamp=timestamp+delta
-						if datetime.datetime.today() > expire_timestamp:
-							snapshot_list.append(snapshot)
-				except ValueError:
-					pass
+			try:
+				expire_timestamp = TimeSnapshots.Get_snapshot_expiration(snapshot_name)
+				if expire_timestamp != None and datetime.datetime.today() > expire_timestamp:
+					snapshot_list.append(snapshot)
+			except ValueError:
+				pass
+
 		return snapshot_list
 
 	def expire_snapshots(self):
