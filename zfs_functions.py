@@ -55,9 +55,9 @@ class ZFS_pool:
 	dry_run=False
 	destructive=False
 	def __str__(self):
-		return "pool["+self.remote_cmd+"]<"+self.pool+">"
+		return "pool["+" ".join(self.remote_cmd)+"]<"+self.pool+">"
 
-	def __init__(self,pool,remote_cmd="",verbose=False,dry_run=False,destructive=False):
+	def __init__(self,pool,remote_cmd=[],verbose=False,dry_run=False,destructive=False):
 		self.pool=pool
 		self.remote_cmd=remote_cmd
 		self.verbose=verbose
@@ -68,8 +68,18 @@ class ZFS_pool:
 		self.update_zfs_filesystems()
 		self.update_zfs_snapshots()
 
+	def prepare_command(self, args):
+		args = self.remote_cmd + [arg for arg in args if arg != None]
+		return args
+		
+	def command_to_string(self, args):
+		return " ".join(self.prepare_command(args))
+		
 	def remote_exec(self, args):
-		return subprocess.check_output([self.remote_cmd] + args, universal_newlines=True)
+		return subprocess.check_output(self.prepare_command(args), universal_newlines=True)
+
+	def remote_exec_no_out(self, args):
+		return subprocess.check_call(self.prepare_command(args))
 
 	def update_zfs_snapshots(self, timeout=180):
 		with TimeoutObject(timeout):
@@ -139,16 +149,16 @@ class ZFS_pool:
 				yield fs
 
 	def delete_missing_fs_from_target(self,target=None, fs_filter="", target_prefix=""):
-		verbose_flag=""
+		verbose_flag=None
 		if self.verbose:
 			verbose_flag="-v"
 		for fs in target.get_zfs_filesystems(fs_filter=target_prefix+fs_filter):
 			if fs[len(target_prefix):] not in self.zfs_filesystems:
-				command=target.remote_cmd+" zfs destroy -R "+verbose_flag+" "+fs
+				command=["zfs", "destroy", "-R", verbose_flag, fs]
 				if self.verbose:
-					print("running: "+command)
+					print("running: "+self.command_to_string(command))
 				if not self.dry_run:
-					subprocess.call(command,shell=True)
+					self.remote_exec_no_out(command)
 
 
 	def scrub_running():
@@ -157,8 +167,6 @@ class ZFS_pool:
 
 class ZFS_fs:
 
-	def __str__(self):
-		return str(self.pool)+" fs:"+self.fs
 	def __init__(self,fs=None,remote_cmd="", pool=None, verbose=False, dry_run=False, destructive=False):
 		self.verbose=verbose
 		self.dry_run=dry_run
@@ -172,6 +180,13 @@ class ZFS_fs:
 			self.pool=pool
 		self.destructive=False
 
+	def __str__(self):
+		return ZFS_fs.Snapshot_To_Str(self.pool, self.fs)
+
+	@staticmethod
+	def Snapshot_To_Str(pool, snapshot_name):
+		return str(pool)+" fs:"+snapshot_name
+
 	def get_snapshots(self):
 		return self.pool.get_zfs_snapshots(fs=self.fs, recursive=False)
 
@@ -179,15 +194,13 @@ class ZFS_fs:
 		return self.pool.get_zfs_snapshots_reversed(fs=self.fs, recursive=False)
 
 	def get_last_snapshot(self):
-		list=subprocess.check_output(
-			self.pool.remote_cmd+" zfs list -o name -t snapshot -H -r -d 1 "+self.fs,shell=True,universal_newlines=True).split("\n")
+		list=self.pool.remote_exec(["zfs", "list", "-o", "name", "-t", "snapshot", "-H", "-r", "-d", "1", self.fs]).split("\n")
 		if len(list) < 2:
 			return None
 		return list[-2]
 
 	def get_first_snapshot(self):
-		list=subprocess.check_output(
-			self.pool.remote_cmd+" zfs list -o name -t snapshot -H -r -d 1 "+self.fs,shell=True,universal_newlines=True).split("\n")
+		list=self.pool.remote_exec(["zfs", "list", "-o", "name", "-t", "snapshot", "-H", "-r", "-d", "1", self.fs]).split("\n")
 		if len(list) < 2:
 			return None
 		return list[0]
@@ -218,38 +231,38 @@ class ZFS_fs:
 			snapshot=self.fs+"@"+prefix+"-"+self.timestamp_string()
 		else:
 			snapshot=self.fs+"@"+name
-		snapshot_command=self.pool.remote_cmd+" zfs snapshot "+snapshot
+		snapshot_command=["zfs", "snapshot", snapshot]
 		if self.verbose or self.dry_run:
-			print("Running: "+snapshot_command)
+			print("Running: "+self.pool.command_to_string(snapshot_command))
 		if not self.dry_run:
-			subprocess.check_call(snapshot_command, shell=True)
+			self.pool.remote_exec_no_out(snapshot_command)
 			self.pool.zfs_snapshots.append(snapshot)
 		return snapshot
 
 	def destroy_zfs_snapshot(self,snapshot):
-		snapshot_command=self.pool.remote_cmd+" zfs destroy "+snapshot
+		snapshot_command=["zfs", "destroy", snapshot]
 		if self.verbose or self.dry_run:
-			print("Running: "+snapshot_command)
+			print("Running: "+self.pool.command_to_string(snapshot_command))
 		if not self.dry_run:
-			subprocess.check_call(snapshot_command, shell=True)
+			self.pool.remote_exec_no_out(snapshot_command)
 
 	def estimate_snapshot_size(self,end_snapshot,start_snapshot=None):
 		if start_snapshot==None:
-			estimate=subprocess.check_output(self.pool.remote_cmd+" zfs send -nvP "+end_snapshot,shell=True,universal_newlines=True).split("\n")[-2]
+			estimate=self.pool.remote_exec(["zfs", "send", "-nvP", end_snapshot]).split("\n")[-2]
 		else:
-			estimate=subprocess.check_output(self.pool.remote_cmd+" zfs send -nvP -I "+start_snapshot+" "+end_snapshot,shell=True,universal_newlines=True).split("\n")[-2]
+			estimate=self.pool.remote_exec(["zfs", "send", "-nvP", "-I", start_snapshot, end_snapshot]).split("\n")[-2]
 		size=estimate.split("size	")[1]
 		return size
 
 	def transfer_to(self,dst_fs=None,print_output=False):
 		if self.verbose:
-			print("trying to transfer: "+self.pool.remote_cmd+" "+self.fs+" to "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+".")
+			print("trying to transfer: "+str(self)+" to "+str(dst_fs)+".")
 		if dst_fs.fs in dst_fs.pool.zfs_filesystems:
 			if self.verbose:
-				print(dst_fs.fs+" already exists.")
+				print(str(dst_fs)+" already exists.")
 		if dst_fs.destructive or (dst_fs.fs not in dst_fs.pool.zfs_filesystems):
 			if self.verbose:
-				print ("resetting "+dst_fs.fs)
+				print ("resetting "+str(dst_fs))
 			last_src_snapshot=self.get_last_snapshot()
 			first_src_snapshot=self.get_first_snapshot()
 			if first_src_snapshot == None:
@@ -293,7 +306,12 @@ class ZFS_fs:
 					if self.verbose:
 						print("Sucessfully transferred "+last_src_snapshot)
 					return True
+			if self.dry_run:
+				print("No transfer (dry run)")
+				return True
 			raise Exception ( "sync : "+str(commands)+" failed")
+		print("Destructive transfer not enabled; perhaps there is no common snapshot")
+		return False
 
 
 	def sync_without_snap(self,dst_fs=None,print_output=False):
@@ -301,12 +319,12 @@ class ZFS_fs:
 			last_common_snapshot=self.get_last_common_snapshot(dst_fs=dst_fs)
 		else:
 			if self.verbose:
-				print(dst_fs.pool.remote_cmd+" "+dst_fs.fs+" does not exist.")
+				print(str(dst_fs)+" does not exist.")
 			last_common_snapshot=None
 
 		if last_common_snapshot != None:
 			if self.verbose:
-				print("Sync mark found: "+self.pool.remote_cmd+" "+last_common_snapshot)
+				print("Sync mark found: "+ZFS_fs.Snapshot_To_Str(self.pool, last_common_snapshot))
 
 			sync_mark_snapshot=self.get_last_snapshot();
 			if last_common_snapshot==sync_mark_snapshot:
@@ -322,7 +340,7 @@ class ZFS_fs:
 
 	def sync_with(self,dst_fs=None,target_name="",print_output=False):
 		if self.verbose:
-			print("Syncing "+self.pool.remote_cmd+" "+self.fs+" to "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+" with target name "+target_name+".")
+			print("Syncing "+str(self)+" to "+str(dst_fs)+" with target name "+target_name+".")
 
 		self.create_zfs_snapshot(prefix=target_name)
 		self.sync_without_snap(dst_fs=dest_fs,print_output=print_output)
@@ -353,7 +371,7 @@ class ZFS_fs:
 
 	def remove_deleted_snapshots(self,dst_fs=None):
 		if self.verbose:
-			print("Removing snapshots previously removed from "+self.pool.remote_cmd+" "+self.fs+" from "+dst_fs.pool.remote_cmd+" "+dst_fs.fs+".")
+			print("Removing snapshots previously removed from "+str(self)+" from "+str(dst_fs)+".")
 
 		snapshot_names=self.get_missing_snapshot_names(dst_fs=dst_fs)
 		if len(snapshot_names) == 0:
@@ -368,14 +386,14 @@ class ZFS_fs:
 		return True
 
 	def rollback(self,snapshot):
-		rollback=self.pool.remote_cmd+" zfs rollback -r "+self.fs+"@"+snapshot
+		rollback=["zfs", "rollback", "-r", self.fs+"@"+snapshot]
 		if self.dry_run==True:
-			print(rollback)
+			print(self.pool.command_to_string(rollback))
 			return True
 		else:
 			if self.verbose:
-				print("Running rollback: "+rollback)
-			subprocess.check_call(rollback,shell=True)
+				print("Running rollback: "+self.pool.command_to_string(rollback))
+			self.pool.remote_exec_no_out(rollback)
 
 	def clean_snapshots(self,prefix="", number_to_keep=None):
 		if self.verbose == True:
@@ -411,12 +429,12 @@ class ZFS_fs:
 				self.destroy_snapshot(snap_to_remove=snap_to_remove)
 
 	def destroy_snapshot(self,snap_to_remove):
-		command=self.pool.remote_cmd+" zfs destroy "+self.verbose_switch()+snap_to_remove
+		command=["zfs", "destroy", self.verbose_switch(), snap_to_remove]
 		if self.verbose or self.dry_run:
-			print(command)
+			print(self.pool.command_to_string(command))
 		if not self.dry_run:
 			try:
-				subprocess.check_call(command, shell=True)
+				self.pool.remote_exec_no_out(command)
 				self.pool.zfs_snapshots.remove(snap_to_remove)
 				return True
 			except subprocess.CalledProcessError as e:
@@ -428,9 +446,9 @@ class ZFS_fs:
 
 	def verbose_switch(self):
 		if self.verbose==True:
-			return "-v "
+			return "-v"
 		else:
-			return ""
+			return None
 
 class TimeSnapshots:
 
@@ -516,8 +534,8 @@ class TimeSnapshots:
 
 
 
-def get_process_list(remote=""):
-	ps = subprocess.Popen(remote+' ps aux', shell=True, universal_newlines=True,\
+def get_process_list(remote=[]):
+	ps = subprocess.Popen(remote + ["ps", "aux"], shell=True, universal_newlines=True,\
 		stdout=subprocess.PIPE).communicate()[0]
 	processes = ps.split('\n')
 	nfields = len(processes[0].split()) - 1
@@ -548,7 +566,7 @@ class TimeoutObject(object):
 						return False
 				return not self.raise_exception
 
-def get_pids_for_cmd_line_parts(remote="",cmd_line_parts=[]):
+def get_pids_for_cmd_line_parts(remote=[],cmd_line_parts=[]):
 	pids=[]
 	for line in get_process_list(remote=remote):
 		if len(line)<=1:
@@ -560,7 +578,7 @@ def get_pids_for_cmd_line_parts(remote="",cmd_line_parts=[]):
 			pids.append(line[1])
 	return pids
 
-def waitfor_cmd_to_exit(remote="", cmd_line_parts=[], sleep=5):
+def waitfor_cmd_to_exit(remote=[], cmd_line_parts=[], sleep=5):
 	pids=get_pids_for_cmd_line_parts(remote=remote,cmd_line_parts=cmd_line_parts)
 	if len(pids)>0:
 		while True:

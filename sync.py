@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 
 import argparse
+import shlex
 import sys
 
 from zfs_functions import *
@@ -24,8 +25,8 @@ if __name__ == '__main__':
   dst_pool = args.dst.split("/")[0]
   dst_prefix = args.dst
   
-  src_cmd = args.s if args.s != None else ""
-  dst_cmd = args.d if args.d != None else ""
+  src_cmd = shlex.split(args.s) if args.s != None else []
+  dst_cmd = shlex.split(args.d) if args.d != None else []
 
   try:
     src=ZFS_pool(pool=src_pool, remote_cmd=src_cmd, verbose=args.verbose)

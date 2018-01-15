@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 
 import argparse
+import shlex
 import sys
 
 from zfs_functions import *
@@ -26,7 +27,7 @@ if __name__ == '__main__':
     print ("Invalid duration "+durationStr)
     sys.exit()
 
-  cmd = args.s if args.s != None else ""
+  cmd = shlex.split(args.s) if args.s != None else []
 
   try:
     src=ZFS_pool(pool=pool, remote_cmd=cmd, verbose=args.verbose)
