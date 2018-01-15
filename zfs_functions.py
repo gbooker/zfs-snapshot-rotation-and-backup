@@ -50,6 +50,14 @@ class ZFS_iterator:
 		else:
 			raise StopIteration()
 
+class Pending_Command:
+	def __init__(self, pool, args=[]):
+		self.pool = pool
+		self.args = args
+
+	def __str__(self):
+		return "cmd["+" ".join(self.pool.remote_cmd)+":"+" ".join(self.args)+"]"
+
 class ZFS_pool:
 	verbose=False
 	dry_run=False
@@ -80,6 +88,14 @@ class ZFS_pool:
 
 	def remote_exec_no_out(self, args):
 		return subprocess.check_call(self.prepare_command(args))
+
+	def remote_exec_piped(self, args, input_pipe=None):
+		p = subprocess.Popen(self.prepare_command(args), stdin=input_pipe, stdout=subprocess.PIPE)
+		if input_pipe:
+			# So that previous process receives a SIG_PIPE if this one exits
+			input_pipe.close()
+
+		return p
 
 	def update_zfs_snapshots(self, timeout=180):
 		with TimeoutObject(timeout):
@@ -270,35 +286,30 @@ class ZFS_fs:
 				return False
 			for snapshot in dst_fs.get_snapshots_reversed():
 				dst_fs.destroy_zfs_snapshot(snapshot)
-			firstCmd=self.pool.remote_cmd+" zfs send -p  "+first_src_snapshot
+			firstCmds=[Pending_Command(self.pool, ["zfs", "send", "-p", first_src_snapshot])]
 			if first_src_snapshot != last_src_snapshot:
-				secondCmd=self.pool.remote_cmd+" zfs send -p -I "+first_src_snapshot+" "+last_src_snapshot
+				secondCmds=[Pending_Command(self.pool, ["zfs", "send", "-p", "-I", first_src_snapshot, last_src_snapshot])]
 			else:
-				secondCmd=None
+				secondCmds=None
 			if print_output:
 				size=self.estimate_snapshot_size(first_src_snapshot)
-				firstCmd+="|pv -pterbs "+size
+				firstCmds.append(Pending_Command(self.pool, ["pv", "-pterbs", size]))
 				if first_src_snapshot != last_src_snapshot:
 					size=self.estimate_snapshot_size(last_src_snapshot,start_snapshot=first_src_snapshot)
-					secondCmd+="|pv -pterbs "+size
-			firstCmd+="|"+dst_fs.pool.remote_cmd+" zfs receive -vF "+dst_fs.fs
+					secondCmds.append(Pending_Command(self.pool, ["pv", "-pterbs", size]))
+			firstCmds.append(Pending_Command(dst_fs.pool, ["zfs", "receive", "-vF", dst_fs.fs]))
 			if first_src_snapshot != last_src_snapshot:
-				secondCmd+="|"+dst_fs.pool.remote_cmd+" zfs receive -v "+dst_fs.fs 
+				secondCmds.append(Pending_Command(dst_fs.pool, ["zfs", "receive", "-v", dst_fs.fs]))
 			commands=[\
-				firstCmd,\
-				self.pool.remote_cmd+" zfs set readonly=on "+dst_fs.fs,\
-				secondCmd
+				firstCmds,\
+				[Pending_Command(self.pool, ["zfs", "set", "readonly=on", dst_fs.fs])],\
+				secondCmds
 			]
 
-			for command in commands:
-				if command == None:
+			for commandSet in commands:
+				if commandSet == None:
 					continue
-				if self.verbose or self.dry_run:
-					print("running "+command)
-				if not self.dry_run:
-					output=subprocess.check_output(command,shell=True,universal_newlines=True)
-					if print_output:
-						print(output)
+				self.run_command_set(commandSet, print_output)
 			last_src_snapshot_name = last_src_snapshot.split("@")[1]
 			dst_fs.pool.update_zfs_snapshots()
 			for snap in dst_fs.get_snapshots():
@@ -313,6 +324,18 @@ class ZFS_fs:
 		print("Destructive transfer not enabled; perhaps there is no common snapshot")
 		return False
 
+	def run_command_set(self, commandSet, print_output):
+		if self.verbose or self.dry_run:
+			print("running "+" | ".join([str(cmd) for cmd in commandSet]))
+		if not self.dry_run:
+			prev_pipe=None
+			for command in commandSet:
+				proc=command.pool.remote_exec_piped(command.args, prev_pipe)
+				prev_pipe=proc.stdout
+
+			output=proc.communicate()[0]
+			if print_output:
+				print(output)
 
 	def sync_without_snap(self,dst_fs=None,print_output=False):
 		if dst_fs.fs in dst_fs.pool.zfs_filesystems:
@@ -347,17 +370,12 @@ class ZFS_fs:
 
 	def run_sync(self,dst_fs=None, start_snap=None, stop_snap=None,print_output=False):
 		size=self.estimate_snapshot_size(stop_snap,start_snapshot=start_snap)
-		sync_command=self.pool.remote_cmd+" zfs send -p -I "+start_snap+" "+stop_snap
+		sync_commands=[Pending_Command(self.pool, ["zfs", "send", "-p", "-I", start_snap, stop_snap])]
 		if print_output:
-			sync_command+="|pv -pterbs "+size
-		sync_command+="|"+dst_fs.pool.remote_cmd+" zfs receive -Fv "+dst_fs.fs
-		if self.verbose or self.dry_run:
-			print("Running sync: "+sync_command)
+			sync_commands.append(Pending_Command(self.pool, ["pv", "-pterbs", size]))
+		sync_commands.append(Pending_Command(dst_fs.pool, ["zfs", "receive", "-Fv", dst_fs.fs]))
+		self.run_command_set(sync_commands, print_output)
 		if not self.dry_run:
-			output=subprocess.check_output(sync_command,shell=True,universal_newlines=True)
-			if print_output:
-				print(output)
-
 			dst_fs.pool.update_zfs_snapshots()
 			sync_mark=stop_snap.split("@")[1]
 			for snap in dst_fs.get_snapshots():
@@ -365,7 +383,7 @@ class ZFS_fs:
 					if self.verbose:
 						print("Sucessfully transferred "+stop_snap)
 					return True
-			raise Exception ( "sync : "+sync_command+" failed")
+			raise Exception ( "sync : "+" | ".join([str(cmd) for cmd in commandSet])+" failed")
 
 		return True
 
