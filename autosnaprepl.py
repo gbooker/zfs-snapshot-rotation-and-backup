@@ -363,7 +363,7 @@ class SnapshotAndRepl():
         try:
           pool=ZFS_pool(pool=poolName, remote_cmd=snapshotJob.remoteCmd, verbose=self.verbose)
         except subprocess.CalledProcessError:
-          print("Cannot get pool " + poolName + " to make snapshots.")
+          print("Cannot get pool " + " ".join(snapshotJob.remoteCmd) + ":" + poolName + " to make snapshots.")
           continue
         datasetLen=dataset.rfind('/')+1
         for fs in pool.get_zfs_filesystems(fs_filter=dataset):
@@ -466,7 +466,7 @@ class SnapshotAndRepl():
           src=ZFS_pool(pool=srcPool, remote_cmd=replicationJob.srcCmd, verbose=self.verbose)
           dst=ZFS_pool(pool=dstPool, remote_cmd=replicationJob.dstCmd, verbose=self.verbose)
         except subprocess.CalledProcessError:
-          print('Could not open source/destination: ' + srcCmd + ' ' + srcPool + ', ' + dstCmd + ' ' + dstPool)
+          print('Could not open source/destination: ' + " ".join(srcCmd) + ':' + srcPool + ', ' + " ".join(dstCmd) + ':' + dstPool)
           continue
         srcPrefixLen=srcDataset.rfind('/')+1
 
@@ -477,7 +477,7 @@ class SnapshotAndRepl():
           srcFS=ZFS_fs(fs=fs, pool=src, verbose=self.verbose, dry_run=self.dryRun)
           dstFS=ZFS_fs(fs=dstDataset+"/"+fs[srcPrefixLen:], pool=dst, verbose=self.verbose, dry_run=self.dryRun)
           if not srcFS.sync_without_snap(dst_fs=dstFS, print_output=self.printOutput):
-            print('sync failure for: ' + srcCmd + ' ' + srcPool + ', ' + dstCmd + ' ' + dstPool)
+            print('sync failure for ' + fs + ' from ' + src + ' to ' + dst + ' at ' + dstDataset)
             failure = True
             break
           srcFS.remove_deleted_snapshots(dst_fs=dstFS)
@@ -493,7 +493,7 @@ if __name__ == '__main__':
   parser=argparse.ArgumentParser(description="Automatically takes snapshots and replicate.")
   parser.add_argument("--config", help="The path of the config file")
   parser.add_argument("--force-replication", help="Force replication even if last replication has already synced snapshots.", action="store_true")
-  parser.add_argument("--dry-run", help="Just display what would be done. Notice that since no snapshots will be transfered, less will be marked for theoretical destruction. ", action="store_true")
+  parser.add_argument("--dry-run", help="Just display what would be done. Notice that since no snapshots will be taken, less will be marked for replication. ", action="store_true")
   parser.add_argument("--verbose", help="Display what is being done", action="store_true")
   parser.add_argument("--print-output", help="Print the output of zfs receive", action="store_true")
 
