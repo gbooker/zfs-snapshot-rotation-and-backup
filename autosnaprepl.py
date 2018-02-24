@@ -20,7 +20,9 @@
 #       "dataset":"tank/home",
 #       "destination":"woody/backup",
 #       "srcCmd":["ssh", "remotehosta"],
-#       "dstCmd":["ssh", "remotehostb"]
+#       "dstCmd":["ssh", "remotehostb"],
+#       "sendLargeBlocks":true,
+#       "sendCompressed":true
 #     }
 #   }
 # }
@@ -41,6 +43,9 @@
 # The "dataset" filesystem is replicated to the "destination".  Note, a "dataset" of "tank/home"
 # and a "destination" of "woody/backup" will replicate "tank/home" into "woody/backup/home"
 # Replications are recusive
+# Both the "sendLargeBlocks" and "sendCompressed" keys are optional (assumed false) and control the use of
+# the "-L" and "-c" flags on zfs send.
+
 
 from zfs_functions import *
 
@@ -153,6 +158,20 @@ class ReplicationConfig(ConfigObject):
           return '"dstCmd" must be a list of strings if present'
     else:
       self.dstCmd = []
+
+    if 'sendLargeBlocks' in self.config:
+      self.sendLargeBlocks = self.config['sendLargeBlocks']
+      if not isinstance(self.sendLargeBlocks, bool):
+        return '"sendLargeBlocks" must be a boolean type if present'
+    else:
+      self.sendLargeBlocks = False
+
+    if 'sendCompressed' in self.config:
+      self.sendCompressed = self.config['sendCompressed']
+      if not isinstance(self.sendCompressed, bool):
+        return '"sendCompressed" must be a boolean type if present'
+    else:
+      self.sendCompressed = False
 
     return ''
   
@@ -476,6 +495,10 @@ class SnapshotAndRepl():
             print("Replicating for: " + fs)
           srcFS=ZFS_fs(fs=fs, pool=src, verbose=self.verbose, dry_run=self.dryRun)
           dstFS=ZFS_fs(fs=dstDataset+"/"+fs[srcPrefixLen:], pool=dst, verbose=self.verbose, dry_run=self.dryRun)
+
+          srcFS.send_large_blocks = replicationJob.sendLargeBlocks
+          self.send_compressed = replicationJob.sendCompressed
+
           if not srcFS.sync_without_snap(dst_fs=dstFS, print_output=self.printOutput):
             print('sync failure for ' + fs + ' from ' + src + ' to ' + dst + ' at ' + dstDataset)
             failure = True

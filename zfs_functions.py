@@ -195,6 +195,8 @@ class ZFS_fs:
 		else:
 			self.pool=pool
 		self.destructive=False
+		self.send_large_blocks = False
+		self.send_compressed = False
 
 	def __str__(self):
 		return ZFS_fs.Snapshot_To_Str(self.pool, self.fs)
@@ -262,11 +264,20 @@ class ZFS_fs:
 		if not self.dry_run:
 			self.pool.remote_exec_no_out(snapshot_command)
 
+	def get_send_cmd(self):
+		send = ["zfs", "send"]
+		if self.send_large_blocks:
+			send.append("-L")
+		if self.send_compressed:
+			send.append("-c")
+
+		return send
+
 	def estimate_snapshot_size(self,end_snapshot,start_snapshot=None):
 		if start_snapshot==None:
-			estimate=self.pool.remote_exec(["zfs", "send", "-nvP", end_snapshot]).split("\n")[-2]
+			estimate=self.pool.remote_exec(self.get_send_cmd() + ["-nvP", end_snapshot]).split("\n")[-2]
 		else:
-			estimate=self.pool.remote_exec(["zfs", "send", "-nvP", "-I", start_snapshot, end_snapshot]).split("\n")[-2]
+			estimate=self.pool.remote_exec(self.get_send_cmd() + ["-nvP", "-I", start_snapshot, end_snapshot]).split("\n")[-2]
 		size=estimate.split("size	")[1]
 		return size
 
@@ -286,9 +297,9 @@ class ZFS_fs:
 				return False
 			for snapshot in dst_fs.get_snapshots_reversed():
 				dst_fs.destroy_zfs_snapshot(snapshot)
-			firstCmds=[Pending_Command(self.pool, ["zfs", "send", "-p", first_src_snapshot])]
+			firstCmds=[Pending_Command(self.pool, self.get_send_cmd() + ["-p", first_src_snapshot])]
 			if first_src_snapshot != last_src_snapshot:
-				secondCmds=[Pending_Command(self.pool, ["zfs", "send", "-p", "-I", first_src_snapshot, last_src_snapshot])]
+				secondCmds=[Pending_Command(self.pool, self.get_send_cmd() + ["-p", "-I", first_src_snapshot, last_src_snapshot])]
 			else:
 				secondCmds=None
 			if print_output:
@@ -370,7 +381,7 @@ class ZFS_fs:
 
 	def run_sync(self,dst_fs=None, start_snap=None, stop_snap=None,print_output=False):
 		size=self.estimate_snapshot_size(stop_snap,start_snapshot=start_snap)
-		sync_commands=[Pending_Command(self.pool, ["zfs", "send", "-p", "-I", start_snap, stop_snap])]
+		sync_commands=[Pending_Command(self.pool, self.get_send_cmd() + ["-p", "-I", start_snap, stop_snap])]
 		if print_output:
 			sync_commands.append(Pending_Command(self.pool, ["pv", "-pterbs", size]))
 		sync_commands.append(Pending_Command(dst_fs.pool, ["zfs", "receive", "-Fv", dst_fs.fs]))
