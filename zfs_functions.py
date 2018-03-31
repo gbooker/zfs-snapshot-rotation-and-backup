@@ -172,7 +172,7 @@ class ZFS_pool:
 			if fs[len(target_prefix):] not in self.zfs_filesystems:
 				command=["zfs", "destroy", "-R", verbose_flag, fs]
 				if self.verbose:
-					print("running: "+self.command_to_string(command))
+					print("running: {cmd}".format(cmd=self.command_to_string(command)))
 				if not self.dry_run:
 					self.remote_exec_no_out(command)
 
@@ -251,7 +251,7 @@ class ZFS_fs:
 			snapshot=self.fs+"@"+name
 		snapshot_command=["zfs", "snapshot", snapshot]
 		if self.verbose or self.dry_run:
-			print("Running: "+self.pool.command_to_string(snapshot_command))
+			print("Running: {cmd}".format(cmd=self.pool.command_to_string(snapshot_command)))
 		if not self.dry_run:
 			self.pool.remote_exec_no_out(snapshot_command)
 			self.pool.zfs_snapshots.append(snapshot)
@@ -260,7 +260,7 @@ class ZFS_fs:
 	def destroy_zfs_snapshot(self,snapshot):
 		snapshot_command=["zfs", "destroy", snapshot]
 		if self.verbose or self.dry_run:
-			print("Running: "+self.pool.command_to_string(snapshot_command))
+			print("Running: {cmd}".format(cmd=self.pool.command_to_string(snapshot_command)))
 		if not self.dry_run:
 			self.pool.remote_exec_no_out(snapshot_command)
 
@@ -283,17 +283,17 @@ class ZFS_fs:
 
 	def transfer_to(self,dst_fs=None,print_output=False):
 		if self.verbose:
-			print("trying to transfer: "+str(self)+" to "+str(dst_fs)+".")
+			print("trying to transfer: {fs} to {dst}.".format(fs=self, dst=dst_fs))
 		if dst_fs.fs in dst_fs.pool.zfs_filesystems:
 			if self.verbose:
-				print(str(dst_fs)+" already exists.")
+				print("{dst} already exists.".format(dst=dst_fs))
 		if dst_fs.destructive or (dst_fs.fs not in dst_fs.pool.zfs_filesystems):
 			if self.verbose:
-				print ("resetting "+str(dst_fs))
+				print("resetting {dst}".format(dst=dst_fs))
 			last_src_snapshot=self.get_last_snapshot()
 			first_src_snapshot=self.get_first_snapshot()
 			if first_src_snapshot == None:
-				print ("No snapshots to transfer")
+				print("No snapshots to transfer")
 				return False
 			for snapshot in dst_fs.get_snapshots_reversed():
 				dst_fs.destroy_zfs_snapshot(snapshot)
@@ -326,7 +326,7 @@ class ZFS_fs:
 			for snap in dst_fs.get_snapshots():
 				if last_src_snapshot_name in snap.split("@")[1]:
 					if self.verbose:
-						print("Sucessfully transferred "+last_src_snapshot)
+						print("Successfully transferred {lastSnapshot}".format(lastSnapshot=last_src_snapshot))
 					return True
 			if self.dry_run:
 				print("No transfer (dry run)")
@@ -337,7 +337,7 @@ class ZFS_fs:
 
 	def run_command_set(self, commandSet, print_output):
 		if self.verbose or self.dry_run:
-			print("running "+" | ".join([str(cmd) for cmd in commandSet]))
+			print("running {cmds}".format(cmds=" | ".join([str(cmd) for cmd in commandSet])))
 		if not self.dry_run:
 			prev_pipe=None
 			for command in commandSet:
@@ -353,12 +353,12 @@ class ZFS_fs:
 			last_common_snapshot=self.get_last_common_snapshot(dst_fs=dst_fs)
 		else:
 			if self.verbose:
-				print(str(dst_fs)+" does not exist.")
+				print("{dst} does not exist.".format(dst=dst_fs))
 			last_common_snapshot=None
 
 		if last_common_snapshot != None:
 			if self.verbose:
-				print("Sync mark found: "+ZFS_fs.Snapshot_To_Str(self.pool, last_common_snapshot))
+				print("Sync mark found: {snap}".format(snap=ZFS_fs.Snapshot_To_Str(self.pool, last_common_snapshot)))
 
 			sync_mark_snapshot=self.get_last_snapshot();
 			if last_common_snapshot==sync_mark_snapshot:
@@ -374,7 +374,7 @@ class ZFS_fs:
 
 	def sync_with(self,dst_fs=None,target_name="",print_output=False):
 		if self.verbose:
-			print("Syncing "+str(self)+" to "+str(dst_fs)+" with target name "+target_name+".")
+			print("Syncing {src} to {dst} with target name {name}.".format(src=self, dst=dst_fs, name=target_name))
 
 		self.create_zfs_snapshot(prefix=target_name)
 		self.sync_without_snap(dst_fs=dest_fs,print_output=print_output)
@@ -392,7 +392,7 @@ class ZFS_fs:
 			for snap in dst_fs.get_snapshots():
 				if snap.split("@")[1]==sync_mark:
 					if self.verbose:
-						print("Sucessfully transferred "+stop_snap)
+						print("Successfully transferred {lastSnapshot}".format(lastSnapshot=stop_snap))
 					return True
 			raise Exception ( "sync : "+" | ".join([str(cmd) for cmd in commandSet])+" failed")
 
@@ -400,7 +400,7 @@ class ZFS_fs:
 
 	def remove_deleted_snapshots(self,dst_fs=None):
 		if self.verbose:
-			print("Removing snapshots previously removed from "+str(self)+" from "+str(dst_fs)+".")
+			print("Removing snapshots previously removed from {src} from {dst}.".format(src=self, dst=dst_fs))
 
 		snapshot_names=self.get_missing_snapshot_names(dst_fs=dst_fs)
 		if len(snapshot_names) == 0:
@@ -421,12 +421,12 @@ class ZFS_fs:
 			return True
 		else:
 			if self.verbose:
-				print("Running rollback: "+self.pool.command_to_string(rollback))
+				print("Running rollback: {cmd}".format(cmd=self.pool.command_to_string(rollback)))
 			self.pool.remote_exec_no_out(rollback)
 
 	def clean_snapshots(self,prefix="", number_to_keep=None):
 		if self.verbose == True:
-			print("clean_snapshots:"+str(self))
+			print("clean_snapshots: {fs}".format(fs=self))
 		snapshot_list=[]
 		for snapshot in self.get_snapshots():
 			snapshot_parts=snapshot.split("@")
@@ -440,7 +440,7 @@ class ZFS_fs:
 
 	def clean_other_snapshots(self,prefixes_to_ignore=[], number_to_keep=None):
 		if self.verbose == True:
-			print("clean_other_snapshots:"+str(self))
+			print("clean_other_snapshots: {fs}".format(fs=self))
 		snapshot_list=[]
 		for snapshot in self.get_snapshots():
 			skip=False

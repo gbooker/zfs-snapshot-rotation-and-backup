@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 # This script is intented to be run automatically (such as via crontab) as well as manually.
 # Most of the options are not necessary for an automatic run but may be useful in a manual run.
@@ -73,7 +73,7 @@ class ConfigObject(object):
       return self.getRequired()
 
     self.dataset = self.config['dataset']
-    if not isinstance(self.dataset, basestring):
+    if not isinstance(self.dataset, str):
       return '"dataset" must be a string type'
 
     return ''
@@ -92,7 +92,7 @@ class SnapshotConfig(ConfigObject):
       return self.getRequired()
     
     frequencyStr = self.config['frequency']
-    if not isinstance(frequencyStr, basestring):
+    if not isinstance(frequencyStr, str):
       return '"frequency" must be a string type'
 
     try:
@@ -101,7 +101,7 @@ class SnapshotConfig(ConfigObject):
       return 'Invalid frequency ' + frequencyStr
 
     self.durationStr = self.config['duration']
-    if not isinstance(self.durationStr, basestring):
+    if not isinstance(self.durationStr, str):
       return '"duration" must be a string type'
 
     try:
@@ -114,7 +114,7 @@ class SnapshotConfig(ConfigObject):
       if not isinstance(self.remoteCmd, list):
         return '"remoteCmd" must be a list of strings if present'
       for cmd in self.remoteCmd:
-        if not isinstance(cmd, basestring):
+        if not isinstance(cmd, str):
           return '"remoteCmd" must be a list of strings if present'
     else:
       self.remoteCmd = []
@@ -136,7 +136,7 @@ class ReplicationConfig(ConfigObject):
     if not 'destination' in self.config:
       return self.getRequired()
     self.destination = self.config['destination']
-    if not isinstance(self.destination, basestring):
+    if not isinstance(self.destination, str):
       return '"destination" must be a string type'
 
     if 'srcCmd' in self.config:
@@ -144,7 +144,7 @@ class ReplicationConfig(ConfigObject):
       if not isinstance(self.srcCmd, list):
         return '"srcCmd" must be a list of strings if present'
       for cmd in self.srcCmd:
-        if not isinstance(cmd, basestring):
+        if not isinstance(cmd, str):
           return '"srcCmd" must be a list of strings if present'
     else:
       self.srcCmd = []
@@ -154,7 +154,7 @@ class ReplicationConfig(ConfigObject):
       if not isinstance(self.dstCmd, list):
         return '"dstCmd" must be a list of strings if present'
       for cmd in self.dstCmd:
-        if not isinstance(cmd, basestring):
+        if not isinstance(cmd, str):
           return '"dstCmd" must be a list of strings if present'
     else:
       self.dstCmd = []
@@ -204,7 +204,10 @@ class SnapshotAndRepl():
 
   def lock(self):
     """ Lock the state file """
-    self.fd = open(self.statePath, 'rw+b')
+    try:
+      self.fd = open(self.statePath, 'x+')
+    except FileExistsError:
+      self.fd = open(self.statePath, 'r+')
     fcntl.flock(self.fd, fcntl.LOCK_EX)
 
   def unlock(self):
@@ -317,7 +320,7 @@ class SnapshotAndRepl():
     for name, snapshotConfig in self.config['snapshots'].items():
       snapshot = SnapshotConfig(name, snapshotConfig)
       if len(snapshot.error):
-        print("In snapshot config \"%s\": %s" % (name, snapshot.error))
+        print("In snapshot config \"{name}\": {error}".format(name=name, error=snapshot.error))
         sys.exit(1)
       
       self.snapshots.append(snapshot)
@@ -334,7 +337,7 @@ class SnapshotAndRepl():
     for name, replicationConfig in self.config['replications'].items():
       replication = ReplicationConfig(name, replicationConfig)
       if len(replication.error):
-        print("In replication config \"%s\": %s" % (name, replication.error))
+        print("In replication config \"{name}\": {error}".format(name=name, error=replication.error))
         sys.exit(1)
 
       self.replications.append(replication)
@@ -358,7 +361,7 @@ class SnapshotAndRepl():
     for snapshotJob in self.snapshots:
       jobId = snapshotJob.jobId
       if self.verbose:
-        print("Running snapshot: "+jobId)
+        print("Running snapshot: {job}".format(job=jobId))
       if not snapshotJob.enabled:
         if self.verbose:
           print("Not enabled; skipping")
@@ -370,7 +373,7 @@ class SnapshotAndRepl():
         name = lastSnapshot
         if name == None:
           name = "None"
-        print("Checking if snapshot needed with last: " + name)
+        print("Checking if snapshot needed with last: {name}".format(name=name))
       required = False
       if lastSnapshot == None:
         required = True
@@ -382,12 +385,12 @@ class SnapshotAndRepl():
         try:
           pool=ZFS_pool(pool=poolName, remote_cmd=snapshotJob.remoteCmd, verbose=self.verbose)
         except subprocess.CalledProcessError:
-          print("Cannot get pool " + " ".join(snapshotJob.remoteCmd) + ":" + poolName + " to make snapshots.")
+          print("Cannot get pool {cmd}:{name} to make snapshots.".format(cmd=" ".join(snapshotJob.remoteCmd), name=poolName))
           continue
         datasetLen=dataset.rfind('/')+1
         for fs in pool.get_zfs_filesystems(fs_filter=dataset):
           if self.verbose:
-            print("Making timed snapshot for: " + fs)
+            print("Making timed snapshot for: {fs}".format(fs=fs))
           fs=ZFS_fs(fs=fs, pool=pool, verbose=self.verbose, dry_run=self.dryRun)
           timed=TimeSnapshots(fs=fs)
           snapshot = timed.take_snapshot(durationStr=snapshotJob.durationStr)
@@ -462,7 +465,7 @@ class SnapshotAndRepl():
       for replicationJob in self.replications:
         jobId = replicationJob.jobId
         if self.verbose:
-          print("Running replication: "+jobId)
+          print("Running replication: {job}".format(job=jobId))
         if not replicationJob.enabled:
           if self.verbose:
             print("Not enabled; skipping")
@@ -475,7 +478,7 @@ class SnapshotAndRepl():
           continue
 
         if self.verbose:
-          print("Snapshot " + snapshotNeedingReplication + " needs replication.")
+          print("Snapshot {snapshot} needs replication.".format(snapshot=snapshotNeedingReplication))
 
         srcDataset = replicationJob.dataset
         srcPool = srcDataset.split('/')[0]
@@ -485,14 +488,14 @@ class SnapshotAndRepl():
           src=ZFS_pool(pool=srcPool, remote_cmd=replicationJob.srcCmd, verbose=self.verbose)
           dst=ZFS_pool(pool=dstPool, remote_cmd=replicationJob.dstCmd, verbose=self.verbose)
         except subprocess.CalledProcessError:
-          print('Could not open source/destination: ' + " ".join(srcCmd) + ':' + srcPool + ', ' + " ".join(dstCmd) + ':' + dstPool)
+          print("Could not open source/destination: {srcCmd}:{srcPool}, {dstCmd}:{dstPool}".format(srcCmd=" ".join(srcCmd), srcPool=srcPool, dstCmd=" ".join(dstCmd), dstPool=dstPool))
           continue
         srcPrefixLen=srcDataset.rfind('/')+1
 
         failure = False
         for fs in src.get_zfs_filesystems(fs_filter=srcDataset):
           if self.verbose:
-            print("Replicating for: " + fs)
+            print("Replicating for: {fs}".format(fs=fs))
           srcFS=ZFS_fs(fs=fs, pool=src, verbose=self.verbose, dry_run=self.dryRun)
           dstFS=ZFS_fs(fs=dstDataset+"/"+fs[srcPrefixLen:], pool=dst, verbose=self.verbose, dry_run=self.dryRun)
 
@@ -500,7 +503,7 @@ class SnapshotAndRepl():
           self.send_compressed = replicationJob.sendCompressed
 
           if not srcFS.sync_without_snap(dst_fs=dstFS, print_output=self.printOutput):
-            print('sync failure for ' + fs + ' from ' + src + ' to ' + dst + ' at ' + dstDataset)
+            print("sync failure for {fs} from {src} to {dst} at {dataset}".format(fs=fs, src=src, dst=dst, dataset=dstDataset))
             failure = True
             break
           srcFS.remove_deleted_snapshots(dst_fs=dstFS)
