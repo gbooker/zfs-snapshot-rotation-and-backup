@@ -461,7 +461,8 @@ class SnapshotAndRepl():
 
   def runReplication(self, force):
     """ Start replication """
-    while self.startReplicationAndLock(force):
+    success = True
+    while success and self.startReplicationAndLock(force):
       for replicationJob in self.replications:
         jobId = replicationJob.jobId
         if self.verbose:
@@ -489,6 +490,7 @@ class SnapshotAndRepl():
           dst=ZFS_pool(pool=dstPool, remote_cmd=replicationJob.dstCmd, verbose=self.verbose)
         except subprocess.CalledProcessError:
           print("Could not open source/destination: {srcCmd}:{srcPool}, {dstCmd}:{dstPool}".format(srcCmd=" ".join(srcCmd), srcPool=srcPool, dstCmd=" ".join(dstCmd), dstPool=dstPool))
+          success = False
           continue
         srcPrefixLen=srcDataset.rfind('/')+1
 
@@ -510,6 +512,8 @@ class SnapshotAndRepl():
 
         if not failure:
           self.saveLastReplication(jobId, snapshotNeedingReplication)
+        else:
+          success = False
 
       force=False
       self.unlockForReplication()
