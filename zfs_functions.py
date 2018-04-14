@@ -511,7 +511,7 @@ class TimeSnapshots:
 		if len(deltaStr) < 2:
 			raise ValueError("Invalid duration")
 
-		duration=int(deltaStr[:1])
+		duration=int(deltaStr[:len(deltaStr)-1])
 		if duration < 1:
 			raise ValueError("Duration must be strictly positive")
 
