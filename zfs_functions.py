@@ -135,8 +135,8 @@ class ZFS_pool:
 		return ZFS_iterator(self)
 
 	def get_origin(self,fs=None):
-		origin = self.remote_exec(["zfs", "get", "origin", fs]).split()
-		return origin[6:7][0]
+		origin = self.remote_exec(["zfs", "get", "-H", "origin", fs]).split("\t")
+		return origin[2]
 
 	def get_zfs_filesystems(self, fs_filter=""):
 		for fs in self.zfs_filesystems:
