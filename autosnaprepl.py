@@ -41,7 +41,8 @@
 # 
 # Replications:
 # The "dataset" filesystem is replicated to the "destination".  Note, a "dataset" of "tank/home"
-# and a "destination" of "woody/backup" will replicate "tank/home" into "woody/backup/home"
+# and a "destination" of "woody/backup" will replicate "tank/home" into "woody/backup/home" but a  "dataset"
+# of "tank/home/" and a "destination" of "woody/backup" will replicate "tank/home" into "woody/home".
 # Replications are recusive
 # Both the "sendLargeBlocks" and "sendCompressed" keys are optional (assumed false) and control the use of
 # the "-L" and "-c" flags on zfs send.
@@ -449,7 +450,7 @@ class SnapshotAndRepl():
     """ Determine if the given replication is needed """
     state = self.getState()
     
-    dataset = replicationJob.dataset
+    dataset = replicationJob.dataset.rstrip('/')
     jobId = replicationJob.jobId
     if dataset in state['lastSnapshotMade']:
       lastSnapshot = state['lastSnapshotMade'][dataset]
@@ -495,11 +496,11 @@ class SnapshotAndRepl():
         srcPrefixLen=srcDataset.rfind('/')+1
 
         failure = False
-        for fs in src.get_zfs_filesystems(fs_filter=srcDataset):
+        for fs in src.get_zfs_filesystems(fs_filter=srcDataset.rstrip('/')):
           if self.verbose:
             print("Replicating for: {fs}".format(fs=fs))
           srcFS=ZFS_fs(fs=fs, pool=src, verbose=self.verbose, dry_run=self.dryRun)
-          dstFS=ZFS_fs(fs=dstDataset+"/"+fs[srcPrefixLen:], pool=dst, verbose=self.verbose, dry_run=self.dryRun)
+          dstFS=ZFS_fs(fs=(dstDataset+"/"+fs[srcPrefixLen:]).rstrip('/'), pool=dst, verbose=self.verbose, dry_run=self.dryRun)
 
           srcFS.send_large_blocks = replicationJob.sendLargeBlocks
           self.send_compressed = replicationJob.sendCompressed
