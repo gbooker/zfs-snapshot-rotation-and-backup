@@ -65,10 +65,11 @@ class ZFS_pool:
 	def __str__(self):
 		return "pool["+" ".join(self.remote_cmd)+"]<"+self.pool+">"
 
-	def __init__(self,pool,remote_cmd=[],verbose=False,dry_run=False,destructive=False):
+	def __init__(self,pool,remote_cmd=[],verbose=False,dry_run=False,destructive=False,veryVerbose=False):
 		self.pool=pool
 		self.remote_cmd=remote_cmd
 		self.verbose=verbose
+		self.veryVerbose=veryVerbose
 		self.dry_run=dry_run
 		self.destructive=destructive
 		self.zfs_filesystems=[]
@@ -78,6 +79,8 @@ class ZFS_pool:
 
 	def prepare_command(self, args):
 		args = self.remote_cmd + [arg for arg in args if arg != None]
+		if self.veryVerbose:
+			print("Going to run: {cmd}".format(cmd=" ".join(args)));
 		return args
 		
 	def command_to_string(self, args):

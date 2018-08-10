@@ -199,6 +199,7 @@ class SnapshotAndRepl():
     
     self.locks = {}
     self.verbose = False
+    self.veryVerbose = False
     self.dryRun = False
     self.printOutput = False
     self.readConfig()
@@ -384,7 +385,7 @@ class SnapshotAndRepl():
       if required:
         poolName = dataset.split("/")[0]
         try:
-          pool=ZFS_pool(pool=poolName, remote_cmd=snapshotJob.remoteCmd, verbose=self.verbose)
+          pool=ZFS_pool(pool=poolName, remote_cmd=snapshotJob.remoteCmd, verbose=self.verbose, veryVerbose=self.veryVerbose)
         except subprocess.CalledProcessError:
           print("Cannot get pool {cmd}:{name} to make snapshots.".format(cmd=" ".join(snapshotJob.remoteCmd), name=poolName))
           continue
@@ -487,8 +488,8 @@ class SnapshotAndRepl():
         dstDataset = replicationJob.destination
         dstPool = dstDataset.split('/')[0]
         try:
-          src=ZFS_pool(pool=srcPool, remote_cmd=replicationJob.srcCmd, verbose=self.verbose)
-          dst=ZFS_pool(pool=dstPool, remote_cmd=replicationJob.dstCmd, verbose=self.verbose)
+          src=ZFS_pool(pool=srcPool, remote_cmd=replicationJob.srcCmd, verbose=self.verbose, veryVerbose=self.veryVerbose)
+          dst=ZFS_pool(pool=dstPool, remote_cmd=replicationJob.dstCmd, verbose=self.verbose, veryVerbose=self.veryVerbose)
         except subprocess.CalledProcessError:
           print("Could not open source/destination: {srcCmd}:{srcPool}, {dstCmd}:{dstPool}".format(srcCmd=" ".join(srcCmd), srcPool=srcPool, dstCmd=" ".join(dstCmd), dstPool=dstPool))
           success = False
@@ -526,6 +527,7 @@ if __name__ == '__main__':
   parser.add_argument("--force-replication", help="Force replication even if last replication has already synced snapshots.", action="store_true")
   parser.add_argument("--dry-run", help="Just display what would be done. Notice that since no snapshots will be taken, less will be marked for replication. ", action="store_true")
   parser.add_argument("--verbose", help="Display what is being done", action="store_true")
+  parser.add_argument("--veryVerbose", help="Display what is being done including every command", action="store_true")
   parser.add_argument("--print-output", help="Print the output of zfs receive", action="store_true")
 
   args=parser.parse_args()
@@ -537,7 +539,8 @@ if __name__ == '__main__':
   
   proc = SnapshotAndRepl('/var/lib/zfs-auto/state', config)
   proc.dryRun = args.dry_run
-  proc.verbose = args.verbose
+  proc.verbose = args.verbose or args.veryVerbose
+  proc.veryVerbose = args.veryVerbose
   proc.printOutput = args.print_output
 
   proc.runSnapshots()
