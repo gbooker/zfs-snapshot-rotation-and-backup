@@ -567,8 +567,7 @@ class TimeSnapshots:
 
 
 def get_process_list(remote=[]):
-	ps = subprocess.Popen(remote + ["ps", "aux"], shell=True, universal_newlines=True,\
-		stdout=subprocess.PIPE).communicate()[0]
+	ps = subprocess.check_output(remote + ["ps", "aux"], universal_newlines=True)
 	processes = ps.split('\n')
 	nfields = len(processes[0].split()) - 1
 	def proc_split(row):
