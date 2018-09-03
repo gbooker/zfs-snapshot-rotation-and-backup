@@ -529,6 +529,7 @@ if __name__ == '__main__':
   parser.add_argument("--verbose", help="Display what is being done", action="store_true")
   parser.add_argument("--very-verbose", help="Display what is being done including every command", action="store_true")
   parser.add_argument("--print-output", help="Print the output of zfs receive", action="store_true")
+  parser.add_argument("--enable-replication", help="Enable the specified replication job even if it is disabled", action="append")
 
   args=parser.parse_args()
 
@@ -542,6 +543,18 @@ if __name__ == '__main__':
   proc.verbose = args.verbose or args.very_verbose
   proc.veryVerbose = args.very_verbose
   proc.printOutput = args.print_output
+
+  if args.enable_replication:
+    replicationsByName = {}
+    for replication in proc.replications:
+      replicationsByName[replication.jobId] = replication
+
+    for enable in args.enable_replication:
+      if not enable in replicationsByName:
+        print("No such replication named \"{name}\"".format(name=enable))
+        sys.exit(1)
+
+      replicationsByName[enable].enabled = True
 
   proc.runSnapshots()
   proc.runReplication(args.force_replication)
