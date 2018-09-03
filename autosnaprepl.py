@@ -527,7 +527,7 @@ if __name__ == '__main__':
   parser.add_argument("--force-replication", help="Force replication even if last replication has already synced snapshots.", action="store_true")
   parser.add_argument("--dry-run", help="Just display what would be done. Notice that since no snapshots will be taken, less will be marked for replication. ", action="store_true")
   parser.add_argument("--verbose", help="Display what is being done", action="store_true")
-  parser.add_argument("--veryVerbose", help="Display what is being done including every command", action="store_true")
+  parser.add_argument("--very-verbose", help="Display what is being done including every command", action="store_true")
   parser.add_argument("--print-output", help="Print the output of zfs receive", action="store_true")
 
   args=parser.parse_args()
@@ -539,8 +539,8 @@ if __name__ == '__main__':
   
   proc = SnapshotAndRepl('/var/lib/zfs-auto/state', config)
   proc.dryRun = args.dry_run
-  proc.verbose = args.verbose or args.veryVerbose
-  proc.veryVerbose = args.veryVerbose
+  proc.verbose = args.verbose or args.very_verbose
+  proc.veryVerbose = args.very_verbose
   proc.printOutput = args.print_output
 
   proc.runSnapshots()
