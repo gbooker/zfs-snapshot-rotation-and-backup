@@ -316,7 +316,7 @@ class ZFS_fs:
 				secondCmds.append(Pending_Command(dst_fs.pool, ["zfs", "receive", "-v", dst_fs.fs]))
 			commands=[\
 				firstCmds,\
-				[Pending_Command(self.pool, ["zfs", "set", "readonly=on", dst_fs.fs])],\
+				[Pending_Command(dst_fs.pool, ["zfs", "set", "readonly=on", dst_fs.fs])],\
 				secondCmds
 			]
 
