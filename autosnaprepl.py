@@ -399,7 +399,13 @@ class SnapshotAndRepl():
           snapshotName = snapshot.split('@')[1]
           self.saveLastSnapshot(dataset, jobId, snapshotName)
           snapshotMade = True
-          timed.expire_snapshots()
+
+          # Only remove old snapshot if a replication task isn't running
+          if self.lockForReplication():
+            timed.expire_snapshots()
+            self.unlockForReplication()
+          elif self.verbose:
+            print("Skipping snapshot expiration as replication is in progress")
 
     self.unlockForSnapshot()
     return snapshotMade
