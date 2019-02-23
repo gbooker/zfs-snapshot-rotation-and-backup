@@ -510,7 +510,7 @@ class SnapshotAndRepl():
           dstFS=ZFS_fs(fs=(dstDataset+"/"+fs[srcPrefixLen:]).rstrip('/'), pool=dst, verbose=self.verbose, dry_run=self.dryRun)
 
           srcFS.send_large_blocks = replicationJob.sendLargeBlocks
-          self.send_compressed = replicationJob.sendCompressed
+          srcFS.send_compressed = replicationJob.sendCompressed
 
           if not srcFS.sync_without_snap(dst_fs=dstFS, print_output=self.printOutput):
             print("sync failure for {fs} from {src} to {dst} at {dataset}".format(fs=fs, src=src, dst=dst, dataset=dstDataset))
