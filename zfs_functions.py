@@ -411,7 +411,7 @@ class ZFS_fs:
 				print("No snapshots to remove")
 			return True
 
-		for snapshot_name in snapshot_names:
+		for snapshot_name in sorted(snapshot_names):
 			if not dst_fs.destroy_snapshot(snap_to_remove=dst_fs.fs+"@"+snapshot_name):
 				return False
 
