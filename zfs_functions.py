@@ -102,7 +102,7 @@ class ZFS_pool:
 
 	def update_zfs_snapshots(self, timeout=180):
 		with TimeoutObject(timeout):
-			waitfor_cmd_to_exit(remote=self.remote_cmd, cmd_line_parts=["zfs","list","-t","snapshot"], sleep=5)
+			waitfor_cmd_to_exit(remote=self.remote_cmd, cmd_line_parts=["zfs","list","-t","snapshot"], sleep=10)
 		snapshot_list = self.remote_exec(["zfs", "list", "-o", "name", "-t", "snapshot", "-H", "-r", self.pool]).split("\n")
 		self.zfs_snapshots=snapshot_list
 		return snapshot_list
